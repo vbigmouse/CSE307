@@ -49,6 +49,24 @@ val SOME locations = parse_loc(parse_string)
 val SOME preferences = parse_pref(parse_string)
 val orders = parse_order(parse_string)
 
+fun list2tuple([]) = []
+	| list2tuple(h::t) =
+	let
+		val tup = (List.hd(h), List.nth(h,1), List.last(h))
+	in
+		tup :: list2tuple(t)
+	end;
+
+fun tuple2list([]) = []
+	| tuple2list(L:(int*int*int) list) = 
+		let
+			val lis = [#1 (List.hd(L)), #2 (List.hd(L)), #3 (List.hd(L))] 
+		in
+			lis :: tuple2list(List.tl(L))
+		end;
+
+val orders_tuple = list2tuple(orders);
+
 (* Add the behind place to every sets which has the front place in that set*)
 fun add_behind(old_map:IntListSet.set IntListMap.map, front, behind) = 
 	 (* try to find front in every set in map item x*)
@@ -163,16 +181,16 @@ fun check_all([], order_map, min_vio) = min_vio
 		else min(min_vio, check_all(t, order_map, count_vio(h, order_map)));
 
 (* Generate data format needed and calculates the result*)
-fun violations(NumberOfPeople:int, NumberOfLocations:int, NumberOfPreferences:int, Preferences:int list list) = 
+fun violations(NumberOfPeople:int, NumberOfLocations:int, NumberOfPreferences:int, Preferences: (int*int*int) list) = 
 	let 
-		val order_map = generate_order_map([], Preferences)
+		val order_map = generate_order_map([], tuple2list(Preferences))
 		val all_order = permute(range(NumberOfLocations))
 
 	in
 		check_all(all_order, order_map, ~1)
 	end;
 
-print(String.concat["violations(", Int.toString(violations(people, locations, preferences, orders)), ")\r\n" ] );
+print(String.concat["violations(", Int.toString(violations(people, locations, preferences, orders_tuple)), ")\r\n" ] );
 
 (* Escape interactive mode*)
 val _ = OS.Process.exit(OS.Process.success);
