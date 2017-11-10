@@ -1,0 +1,9 @@
+{
+         a = 1;
+         if (a == 0){
+              print("TRUE"); 
+              }
+         else{
+             print("FALSE");
+          }
+}
