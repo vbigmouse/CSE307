@@ -16,6 +16,7 @@ tokens = (
     'NAME','NUMBER','STRING',
     'PLUS','MINUS','TIMES','DIVIDE','EQUALS','MOD','GREATER','SMALLER','AND','OR','IN','NOT',
     'LPAREN','RPAREN','QUOTA','DQUOTA','COMMA','LBRACK','RBRACK',
+    'EEQUAL','GEQUAL','LEQUAL','NEQUAL','TTIMES','DDIVIDE','DOT',
     )
 
 # Tokens
@@ -33,24 +34,40 @@ t_RPAREN  = r'\)'
 t_LBRACK  = r'\['
 t_RBRACK  = r'\]'
 t_COMMA   = r','
-# t_QUOTA   = r'\''
+t_QUOTA   = r'\''
+t_EEQUAL  = r'=='
+t_GEQUAL  = r'>='
+t_LEQUAL  = r'<='
+t_NEQUAL  = r'<>'
+t_TTIMES  = r'\*\*'
+t_DDIVIDE = r'//'
+t_DOT     = r'.'
 # t_DQUOTA  = r'\"'
 t_NAME    = r'[a-zA-Z_][a-zA-Z0-9_]*'
 
-def t_NUMBER(t): 
-    r'\d+'
-    try:
-        t.value = int(t.value)
-    except ValueError:
-        print("Integer value too large %d", t.value)
-        t.value = 0
-    logging.debug('t_num'+str(t))
-    return t
-
 def t_STRING(t):
-    r'([\'\"])(.*?\2)'
+    r'([\"])(.*?\2)'
     t.value = t.value[1:-1]
     logging.debug('t_string:' + t.value)
+    return t
+
+
+def t_NUMBER(t): 
+    r'\d+(\.(\d*))?'
+    if '.' in t.value:
+        try:
+            t.value = float(t.value)
+        except ValueError:
+            print("Float value too large %f", t.value)
+            t.value = 0
+    else:
+        try:
+            t.value = int(t.value)
+        except ValueError:
+            print("Integer value too large %d", t.value)
+            t.value = 0
+        
+    logging.debug('t_num'+str(t))
     return t
 
 def t_AND(t):
@@ -83,10 +100,13 @@ def t_error(t):
 
 # Parsing rules
 precedence = (
+    ('left','OR'),
+    ('left','AND'),
+    ('left','NOT'),
+    ('left','EEQUAL','GEQUAL','LEQUAL','NEQUAL','GREATER','SMALLER'),
+    ('right','IN'),
     ('left','PLUS','MINUS'),
-    ('left','TIMES','DIVIDE','MOD','GREATER','SMALLER'),
-    ('left','AND','OR'),
-    ('right','UMINUS','NOT','IN'),
+    ('left','TIMES','DIVIDE','MOD','TTIMES','DDIVIDE'),
     )
 
 # dictionary of names
@@ -134,24 +154,24 @@ def p_expression_uni_op(t):
         raise TypeError
 
 def p_expression_long_op(t):
-    '''expression : expression TIMES TIMES expression
-                  | expression GREATER EQUALS expression
-                  | expression SMALLER EQUALS expression
-                  | expression EQUALS EQUALS expression
-                  | expression SMALLER GREATER expression
-                  | expression DIVIDE DIVIDE expression'''
-    if isinstance(t[1], type(t[4])) and (isinstance(t[1], int) or isinstance(t[1], float)):
+    '''expression : expression TTIMES expression
+                  | expression GEQUAL expression
+                  | expression LEQUAL expression
+                  | expression EEQUAL expression
+                  | expression NEQUAL expression
+                  | expression DDIVIDE expression'''
+    if isinstance(t[1], type(t[3])) and (isinstance(t[1], int) or isinstance(t[1], float)):
         #print(str(t[0]) +" "+str(t[1])+" "+str(t[2])+str(t[3])+" "+str(t[4]))
-        if t[2] == '*'   : t[0] = t[1] ** t[4]
-        elif t[2] == '/' : 
-            if t[4] != 0: t[0] = t[1] // t[4] 
+        if t[2] == '**'   : t[0] = t[1] ** t[3]
+        elif t[2] == '//' : 
+            if t[3] != 0: t[0] = t[1] // t[3] 
             else: 
                 print("SEMANTIC ERROR")
                 raise ValueError
-        elif t[2] == '>' : t[0] = 1 if t[1] >= t[4] else 0
-        elif t[2] == '<' : t[0] = 1 if t[1] <= t[4] else 0
-        elif t[2] == '=' : t[0] = 1 if t[1] == t[4] else 0
-        elif t[3] == '>' : t[0] = 1 if t[1] != t[4] else 0
+        elif t[2] == '<>' : t[0] = 1 if t[1] != t[3] else 0
+        elif t[2] == '>=' : t[0] = 1 if t[1] >= t[3] else 0
+        elif t[2] == '<=' : t[0] = 1 if t[1] <= t[3] else 0
+        elif t[2] == '==' : t[0] = 1 if t[1] == t[3] else 0
     else:
         print("SEMANTIC ERROR")
         raise TypeError
@@ -177,8 +197,8 @@ def p_expression_binop(t):
                 print("SEMANTIC ERROR")
                 raise ValueError
         elif t[2] == '%' : t[0] = t[1] % t[3]
-        elif t[2] == '>' : t[0] = t[1] > t[3]
-        elif t[2] == '<' : t[0] = t[1] < t[3]
+        elif t[2] == '>' : t[0] = 1 if t[1] > t[3] else 0
+        elif t[2] == '<' : t[0] = 1 if t[1] < t[3] else 0
     else:
         print("SEMANTIC ERROR")
         raise TypeError
@@ -187,49 +207,41 @@ def p_expression_string(t):
     '''expression : STRING '''
     t[0] = t[1]
 
-def p_expression_list(t):
-    'expression : list'
-    logging.debug("list:'%s'" % str(t) )
-    t[0] = t[1]
-
 def p_list_index(t):
-    # 'list_index : expression NUMBER'
-    '''list_index : LBRACK expression RBRACK expression'''
+    '''list_index : list LBRACK expression RBRACK'''
     logging.debug("list:'%s %s %s %s'" % (t[1],t[2],t[3], t[4] ))
     try:
-        ind = int(t[4])
+        ind = int(t[3])
     except ValueError:
         print("Index not valid")
-    t[0] = t[2][ind]
+    t[0] = t[1][ind]
+
+def p_expressions(t):
+    '''expressions : expression'''
+    t[0] = [t[1]]
+
+def p_expressions_list(t):
+    '''expressions : expressions COMMA expression'''
+    t[0] = t[1] + [t[3]]
 
 def p_list(t):
-    '''list : LBRACK expression RBRACK 
+    '''list : LBRACK expressions RBRACK
+            | LBRACK RBRACK
             | list_index'''
     if len(t) > 2:
         t[0] = t[2] 
     else:
         t[0] = t[1]
 
-def p_lists(t):
-    '''list : expression COMMA expression'''
-    if isinstance(t[3], list):
-        if isinstance(t[1], type(t[3][0])):
-            t[0] = [t[1]] + t[3]
-        else:
-            print("Syntax Error: '%s' type:'%s' different with '%s' type:'%s'" % (t[1], type(t[1]), t[3], type(t[3])))
-            t[0] = 0
-            raise SyntaxError
-    else:
-        if isinstance(t[1], type(t[3])):
-            t[0] = [t[1], t[3]]
-        else:
-            print("Syntax Error: '%s' type:'%s' different with '%s' type:'%s'" % (t[1], type(t[1]), t[3], type(t[3])))
-            t[0] = 0
-            raise SyntaxError
+def p_expression_list(t):
+    '''expression : list'''
+    logging.debug("list:'%s'" % str(t) )
+    t[0] = t[1]
 
-def p_expression_uminus(t):
-    'expression : MINUS expression %prec UMINUS'
-    t[0] = -t[2]
+def p_list_op(t):
+    '''list : list PLUS list
+            | list PLUS expression'''
+    if t[2] == '+'   : t[0] = t[1] + t[3]
 
 def p_expression_group(t):
     'expression : LPAREN expression RPAREN'
@@ -244,7 +256,6 @@ def p_expression_name(t):
     try:
         t[0] = names[t[1]]
     except LookupError:
-        #print("Undefined name '%s'" % t[1])
         t[0] = 0
         raise SyntaxError
 
@@ -261,6 +272,7 @@ def main():
     yacc.yacc()
     r = open(sys.argv[1])
     for line in r:
+        # print(line)
         try:
             yacc.parse(line)
             # yacc.parse(line, debug=True)
