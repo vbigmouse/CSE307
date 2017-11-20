@@ -1,13 +1,13 @@
 # -----------------------------------------------------------------------------
 # main.py
-#
+# define class of Abstract Syntax Tree Nodes
 # Hung-Ruey Chen 109971346
 # -----------------------------------------------------------------------------
 
 import logging
 fmt = "[%(levelname)s]%(funcName)s():%(lineno)i: %(message)s "
-# logging.basicConfig(level=logging.ERROR, format=fmt)
-logging.basicConfig(level=logging.DEBUG, format=fmt)
+logging.basicConfig(level=logging.ERROR, format=fmt)
+# logging.basicConfig(level=logging.DEBUG, format=fmt)
 log = logging.getLogger(__name__)
 
 
@@ -23,18 +23,47 @@ class Node:
 
 names = {}
 
+class ProgramNode(Node):
+    def __init__(self, blocks):
+        self.blks = blocks
+
+    def execute(self):
+        self.blks.execute()
+
+class BlocksNode(Node):
+    def __init__(self, block):
+        self.blks_head = block
+        self.blks_tail = block
+    
+    def AddBlk(self, block):
+        self.blks_tail.next_blk = block
+        self.blks_tail = block
+    
+    def execute(self):
+        exe_blk = self.blks_head
+        while exe_blk:
+            logging.debug(exe_blk)
+            exe_blk.execute()
+            exe_blk = exe_blk.next_blk
+
 class BlockNode(Node):
     def __init__(self, smts, start_ln=0, end_ln=0):
         self.start = start_ln
         self.end = end_ln
         self.smts = smts
+        self.next_blk = None
         
     def execute(self):
-        exe_smt = self.smts.smts_head
-        while exe_smt:
-            logging.debug(exe_smt)
-            exe_smt.execute()
-            exe_smt = exe_smt.next_smt
+        self.smts.execute()
+
+class EmptyBlk(Node):
+    def __init__(self, start_ln=0, end_ln=0):
+        self.start = start_ln
+        self.end = end_ln
+        self.next_blk = None
+
+    def execute(self):
+        pass
 
 class SmtsNode(Node):
     def __init__(self, smt):
@@ -45,9 +74,24 @@ class SmtsNode(Node):
         self.smts_tail.next_smt = smt
         self.smts_tail = smt
 
+    def execute(self):
+        exe_smt = self.smts_head
+        while exe_smt:
+            logging.debug(exe_smt)
+            exe_smt.execute()
+            exe_smt = exe_smt.next_smt
+
 class SmtNode(Node):
     def __init__(self):
         self.next_smt = None
+
+class BlkSmt(SmtNode):
+    def __init__(self, blk):
+        SmtNode.__init__(self)
+        self.blk = blk
+
+    def execute(self):
+        self.blk.execute()
 
 class AssignSmt(SmtNode):
     def __init__(self, name, exp):
@@ -61,17 +105,21 @@ class AssignSmt(SmtNode):
         names[self.name] = self.exp.evaluate()
 
 class ListAssignSmt(SmtNode):
-    def __init__(self, id, indexp, exp):
+    def __init__(self, indexp, exp):
         SmtNode.__init__(self)
-        self.id = id
         self.indexp = indexp
         self.exp = exp
     
     def execute(self):
-        global names
-        logging.debug(self.indexp.evaluate())
-        names[self.id][self.indexp.evaluate()] = self.exp.evaluate()
+        logging.debug(self.indexp.list_exp.evaluate())
+        self.indexp.list_exp.evaluate()[self.indexp.ind.evaluate()] = self.exp.evaluate()
 
+class EmptySmt(SmtNode):
+    def __init__(self):
+        SmtNode.__init__(self)
+    
+    def execute(self):
+        pass
 
 class ExpSmt(SmtNode):
     def __init__(self, exp):
@@ -123,6 +171,7 @@ class WhileSmt(SmtNode):
         self.block = block
     
     def execute(self):
+        logging.debug(self.exp)
         while(self.exp.evaluate()):
             logging.debug(self.block)
             self.block.execute()
@@ -233,7 +282,7 @@ class ExpsExp(ExpNode):
     def evaluate(self):
         exe_exp = self.exps_head
         while exe_exp:
-            logging.debug(exe_exp)
+            logging.debug(exe_exp.evaluate())
             yield exe_exp.evaluate()
             exe_exp = exe_exp.next_exp
 
@@ -255,7 +304,8 @@ class StringExp(ExpNode):
         self.value = string
     
     def evaluate(self):
-        return '\'' + self.value + '\''
+        logging.debug(self.value)
+        return self.value
 
 class ListNode(Node):
     def __init__(self, head):
@@ -263,12 +313,21 @@ class ListNode(Node):
         logging.debug("init list" + str(head))
 
     def evaluate(self):
+        logging.debug(self.head)
         return [] if isinstance(self.head.exps_head, EmptyExp) else list(self.head.evaluate())
+
+class IndexNode(Node):
+    def __init__(self, exp):
+        self.exp = exp
+
+    def evaluate(self):
+        return self.exp.evaluate()
 
 class ListIndex(Node):
     def __init__(self, list_exp, ind):
-        self.ind = ind
         self.list_exp = list_exp
+        self.ind = ind
 
     def evaluate(self):
+        logging.debug(self.list_exp)
         return self.list_exp.evaluate()[self.ind.evaluate()]
